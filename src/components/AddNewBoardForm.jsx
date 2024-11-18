@@ -1,65 +1,62 @@
 import { useContext, useState } from "react";
+import PropTypes from "prop-types";
 import Button from "./Button";
 import TextField from "./TextField";
 import iconCross from "@assets/icon-cross.svg";
 import { DataContext } from "@/DataContext";
 
-const AddNewBoardForm = ({
-  toggleDialog,
-  boardId,
-  columns = [{ id: Date.now() }],
-  title,
-}) => {
+const AddNewBoardForm = ({ toggleDialog, boardId, columns = [], title = "" }) => {
   const { setData, setSelectedBoardIndex } = useContext(DataContext);
-  const [columnsArray, setColumnsArray] = useState(columns);
 
+  // Ensure columns always have a default structure
+  const initialColumns = columns.length ? columns : [{ id: Date.now(), title: "" }];
+  const [columnsArray, setColumnsArray] = useState(initialColumns);
+
+  // Handlers
   const removeColumnHandler = (id) => {
     setColumnsArray((prev) => prev.filter((column) => column.id !== id));
   };
 
   const addNewColumnHandler = () => {
-    setColumnsArray((prev) => [...prev, { id: Date.now() }]);
+    setColumnsArray((prev) => [...prev, { id: Date.now(), title: "" }]);
   };
 
-  const createNewColumnsArray = (formData, columnsArray, boardId) => {
+  const createNewColumnsArray = (formData) => {
     return columnsArray.map((column) => {
-      const tasksArray = boardId ? columnsArray.tasks : [];
-
+      const tasksArray = boardId && column.tasks ? column.tasks : [];
       return {
         id: column.id,
-        title: formData.get(column.id),
+        title: formData.get(String(column.id)) || "",
         tasks: tasksArray,
       };
     });
   };
 
-  const updateData = (boardName, newColumnsArray, setData, boardId) => {
+  const updateData = (boardName, newColumnsArray) => {
     setData((prev) => {
-      let newData;
+      // Ensure `prev` is iterable
+      if (!Array.isArray(prev)) {
+        console.error("Unexpected data structure in DataContext:", prev);
+        return [];
+      }
 
       if (boardId) {
-        newData = prev.map((item) => {
-          if (item.id === boardId) {
-            return {
-              ...item,
-              title: boardName,
-              columns: newColumnsArray,
-            };
-          }
-          return item;
-        });
+        // Update existing board
+        return prev.map((board) =>
+          board.id === boardId
+            ? { ...board, title: boardName, columns: newColumnsArray }
+            : board
+        );
       } else {
-        newData = [
-          ...prev,
-          {
-            id: Date.now(),
-            title: boardName,
-            columns: newColumnsArray,
-          },
-        ];
-        setSelectedBoardIndex(prev.length);
+        // Create new board
+        const newBoard = {
+          id: Date.now(),
+          title: boardName,
+          columns: newColumnsArray,
+        };
+        setSelectedBoardIndex(prev.length); // Select the new board
+        return [...prev, newBoard];
       }
-      return newData;
     });
   };
 
@@ -67,20 +64,22 @@ const AddNewBoardForm = ({
     e.preventDefault();
     const formData = new FormData(e.target);
     const boardName = formData.get("boardName");
-    const newColumnsArray = createNewColumnsArray(
-      formData,
-      columnsArray,
-      boardId,
-    );
 
-    updateData(boardName, newColumnsArray, setData, boardId);
+    if (!boardName) {
+      alert("Board name is required.");
+      return;
+    }
+
+    const newColumnsArray = createNewColumnsArray(formData);
+    updateData(boardName, newColumnsArray);
     toggleDialog(false);
   };
 
   return (
     <form onSubmit={handleFormSubmit}>
+      {/* Board Name */}
       <div>
-        <h3 className="pb-2 pt-6 text-body-m text-medium-grey">Name</h3>
+        <h3 className="pb-2 pt-6 text-body-m text-medium-grey">Board Name</h3>
         <TextField
           placeholder="e.g. Web Design"
           name="boardName"
@@ -88,18 +87,23 @@ const AddNewBoardForm = ({
           required
         />
       </div>
+
+      {/* Columns */}
       <div className="flex flex-col gap-2">
         <h3 className="pt-6 text-body-m text-medium-grey">Columns</h3>
-        {columnsArray.map((obj) => (
-          <div key={obj.id} className="flex items-center gap-4">
+        {columnsArray.map((column) => (
+          <div key={column.id} className="flex items-center gap-4">
             <TextField
-              placeholder="e.g. Web Design"
-              name={obj.id}
-              defaultValue={obj.title}
+              placeholder="e.g. To Do"
+              name={String(column.id)}
+              defaultValue={column.title}
               required
             />
-            <button type="button" onClick={() => removeColumnHandler(obj.id)}>
-              <img src={iconCross} alt="icon cross" />
+            <button
+              type="button"
+              onClick={() => removeColumnHandler(column.id)}
+            >
+              <img src={iconCross} alt="Remove Column" />
             </button>
           </div>
         ))}
@@ -112,13 +116,28 @@ const AddNewBoardForm = ({
           + Add New Column
         </Button>
       </div>
+
+      {/* Submit Button */}
       <div className="mt-6">
         <Button type="submit" variant="primary" size="sm" isFullWidth>
-          {boardId ? "Update" : "Create New"} Board
+          {boardId ? "Update Board" : "Create New Board"}
         </Button>
       </div>
     </form>
   );
+};
+
+AddNewBoardForm.propTypes = {
+  toggleDialog: PropTypes.func.isRequired,
+  boardId: PropTypes.number,
+  columns: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.number.isRequired,
+      title: PropTypes.string,
+      tasks: PropTypes.array,
+    })
+  ),
+  title: PropTypes.string,
 };
 
 export default AddNewBoardForm;
